@@ -102,49 +102,96 @@
       position: fixed; inset: 0;
       display: flex; align-items: center; justify-content: center;
       flex-direction: column;
-      background: #000;
+      background: #0a0a0a;
       z-index: 500;
       cursor: pointer;
-      transition: opacity 0.8s ease;
+      transition: opacity 1.0s ease;
+      overflow: hidden;
+    }
+    #splash::before {
+      content: '';
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse at 30% 20%, rgba(80,30,30,0.4) 0%, transparent 60%),
+        radial-gradient(ellipse at 70% 80%, rgba(40,20,10,0.3) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(60,40,30,0.2) 0%, transparent 70%);
+      animation: bg-shift 8s ease-in-out infinite alternate;
+    }
+    #splash::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(255,255,255,0.015) 2px,
+        rgba(255,255,255,0.015) 4px
+      );
+      pointer-events: none;
+    }
+    @keyframes bg-shift {
+      0% { opacity: 0.6; transform: scale(1); }
+      100% { opacity: 1; transform: scale(1.05); }
     }
     #splash.fade-out {
       opacity: 0;
       pointer-events: none;
     }
     #splash h1 {
-      font-size: clamp(36px, 10vw, 72px);
+      font-size: clamp(40px, 12vw, 80px);
       font-weight: 900;
-      letter-spacing: 0.15em;
+      letter-spacing: 0.2em;
       color: #fff;
       text-transform: uppercase;
-      margin-bottom: 12px;
-      animation: splash-in 1.2s ease-out;
+      margin-bottom: 8px;
+      position: relative;
+      z-index: 1;
+      text-shadow: 0 0 40px rgba(200,60,40,0.3), 0 2px 10px rgba(0,0,0,0.5);
+      animation: splash-in 1.5s ease-out;
     }
     #splash .subtitle {
       font-size: clamp(12px, 3vw, 18px);
-      color: rgba(255,255,255,0.6);
+      color: rgba(255,255,255,0.7);
       letter-spacing: 0.3em;
-      margin-bottom: 40px;
-      animation: splash-in 1.2s ease-out 0.3s both;
+      margin-bottom: 8px;
+      position: relative;
+      z-index: 1;
+      animation: splash-in 1.5s ease-out 0.3s both;
+    }
+    #splash .divider {
+      width: 60px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(200,80,60,0.6), transparent);
+      margin-bottom: 30px;
+      position: relative;
+      z-index: 1;
+      animation: splash-in 1.5s ease-out 0.5s both;
     }
     #splash .enter-hint {
       font-size: clamp(11px, 2.5vw, 14px);
-      color: rgba(255,255,255,0.4);
-      animation: pulse 2s ease-in-out infinite;
+      color: rgba(255,255,255,0.5);
+      position: relative;
+      z-index: 1;
+      animation: pulse 2.5s ease-in-out infinite;
       animation-delay: 1.5s;
       opacity: 0;
       animation-fill-mode: forwards;
+      border: 1px solid rgba(255,255,255,0.2);
+      padding: 10px 24px;
+      border-radius: 30px;
     }
     #splash .credit-line {
       position: absolute;
       bottom: 30px;
       font-size: 10px;
-      color: rgba(255,255,255,0.3);
+      color: rgba(255,255,255,0.25);
       text-align: center;
-      line-height: 1.6;
+      line-height: 1.8;
+      z-index: 1;
+      letter-spacing: 0.05em;
     }
     @keyframes splash-in {
-      from { opacity: 0; transform: translateY(20px); }
+      from { opacity: 0; transform: translateY(30px); }
       to { opacity: 1; transform: translateY(0); }
     }
     @keyframes pulse {
@@ -176,7 +223,8 @@
   <div id="splash">
     <h1>GAZA VR</h1>
     <div class="subtitle">ガザ 3D 戦災デジタルアーカイブ</div>
-    <div class="enter-hint">タップして展示を開始</div>
+    <div class="divider"></div>
+    <div class="enter-hint">展示を開始する</div>
     <div class="credit-line">
       東京大学 × アルジャジーラ × UNRWA<br>
       3D Gaussian Splatting による戦災記録
