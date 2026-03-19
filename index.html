@@ -394,8 +394,11 @@
 
       controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
       controls.maxDistance = 7.0;
       controls.maxPolarAngle = Math.PI * 0.5;
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.4; // ゆっくり自動回転
 
       window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
@@ -569,6 +572,7 @@
       gyroBaseAlpha = null;
       gyroActive = true;
       controls.enabled = false;
+      controls.autoRotate = false;
       vrBtn.textContent = 'ジャイロ終了';
       vrBtn.style.background = 'rgba(200,60,60,0.8)';
       vrBtn.style.borderColor = 'rgba(255,100,100,0.6)';
@@ -598,6 +602,7 @@
       window.removeEventListener('deviceorientation', onDeviceOrientation, true);
       gyroActive = false;
       controls.enabled = true;
+      controls.autoRotate = true;
       vrBtn.textContent = 'ジャイロ体験';
       vrBtn.style.background = 'rgba(60,130,200,0.8)';
       vrBtn.style.borderColor = 'rgba(100,160,255,0.6)';
