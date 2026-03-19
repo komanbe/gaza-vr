@@ -153,6 +153,7 @@
         cameraPos: [4, 1, 2],
         modelPos: [-3, 0, 0],
         modelRot: [-0.3, 180, -0.3],
+        gyroPos: [0.5, 1.0, 1.0],
       },
       {
         title: 'アル・シファ病院 中庭の避難民 02',
@@ -162,6 +163,7 @@
         cameraPos: [-0.75, 1.0, 3.5],
         modelPos: [-1.775, 0, 4.25],
         modelRot: [0, 180, 0.22],
+        gyroPos: [-1.0, 1.0, 4.0],
       },
       {
         title: 'アル・シファ病院 中庭（駐車場）',
@@ -171,6 +173,7 @@
         cameraPos: [0.5, 0, 3],
         modelPos: [0, -1, 0],
         modelRot: [0, 0, 0.1],
+        gyroPos: [0, 0.5, 1.5],
       },
       {
         title: 'アル・シファ病院 破壊された正面入口 01',
@@ -180,6 +183,7 @@
         cameraPos: [3, 0.5, -1],
         modelPos: [2, -1, 0],
         modelRot: [0, 0, -0.1],
+        gyroPos: [2.5, 0.5, -0.5],
       },
       {
         title: 'アル・シファ病院 破壊された正面入口 02',
@@ -189,6 +193,7 @@
         cameraPos: [2, 0, 1],
         modelPos: [0, 0, 0],
         modelRot: [-0.025, 0, -0.05],
+        gyroPos: [1.0, 0.8, 0.5],
       },
       {
         title: 'アル・シファ病院 内部',
@@ -198,6 +203,7 @@
         cameraPos: [2, 1, 1],
         modelPos: [0, 0, 0],
         modelRot: [-0.1, 0, 0],
+        gyroPos: [1.0, 0.8, 0.5],
       },
       {
         title: '身を寄せ合う新生児たち',
@@ -207,6 +213,7 @@
         cameraPos: [-0.2, 1.5, 3],
         modelPos: [1, 0, -1],
         modelRot: [0, 0, 0],
+        gyroPos: [0.5, 1.0, 1.0],
       },
       {
         title: '応急処置を受ける早産児',
@@ -216,6 +223,7 @@
         cameraPos: [-5, 2, 3],
         modelPos: [-2, 0, 0],
         modelRot: [-0.075, 0.7, -0.4],
+        gyroPos: [-3.0, 1.2, 1.5],
       },
       {
         title: '放棄された新生児集中治療室（NICU）',
@@ -225,6 +233,7 @@
         cameraPos: [-5, 1, 1],
         modelPos: [0, 0, 0],
         modelRot: [0.2, 180, 0.15],
+        gyroPos: [-2.0, 0.8, 0.5],
       },
       {
         title: '日本のODAで建設されたハン・ユニスの陸橋',
@@ -234,6 +243,7 @@
         cameraPos: [3, 2, 5],
         modelPos: [0, 0, 0],
         modelRot: [0, 0, 0],
+        gyroPos: [1.5, 1.2, 2.5],
       },
     ];
 
@@ -297,12 +307,9 @@
       counterEl.textContent = `${index + 1} / ${scenes.length}`;
       updateDots();
 
-      // Camera - gyro mode: place camera at model center for 360° view
-      if (gyroActive) {
-        const cx = s.modelPos ? s.modelPos[0] : 0;
-        const cy = s.modelPos ? s.modelPos[1] + 1.0 : 1.0; // slightly above center (eye height)
-        const cz = s.modelPos ? s.modelPos[2] : 0;
-        camera.position.set(cx, cy, cz);
+      // Camera - gyro mode: use dedicated gyroPos for optimal 360° view
+      if (gyroActive && s.gyroPos) {
+        camera.position.set(...s.gyroPos);
       } else {
         camera.position.set(...s.cameraPos);
         controls.target.set(0, 0, 0);
@@ -452,12 +459,11 @@
       vrBtn.style.background = 'rgba(200,60,60,0.8)';
       vrBtn.style.borderColor = 'rgba(255,100,100,0.6)';
 
-      // Move camera to model center for 360° immersive view
+      // Move camera to gyro position for immersive 360° view
       const s = scenes[currentIndex];
-      const cx = s.modelPos ? s.modelPos[0] : 0;
-      const cy = s.modelPos ? s.modelPos[1] + 1.0 : 1.0;
-      const cz = s.modelPos ? s.modelPos[2] : 0;
-      camera.position.set(cx, cy, cz);
+      if (s.gyroPos) {
+        camera.position.set(...s.gyroPos);
+      }
 
       // Check if gyro data actually arrives
       let gotData = false;
