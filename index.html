@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ガザ 3D デジタルアーカイブ - 戦災記録展</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #000;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+    canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      display: block;
+      z-index: 0;
+    }
+    #ui-overlay {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 12px;
+      z-index: 100;
+      align-items: center;
+    }
+    .ui-btn {
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      backdrop-filter: blur(10px);
+      transition: background 0.2s;
+    }
+    .ui-btn:hover { background: rgba(255,255,255,0.3); }
+    #vr-btn {
+      background: rgba(200,60,60,0.8);
+      border-color: rgba(255,100,100,0.6);
+      font-weight: bold;
+      font-size: 16px;
+      padding: 12px 24px;
+    }
+    #vr-btn:hover { background: rgba(220,80,80,0.9); }
+    #info-panel {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: rgba(0,0,0,0.7);
+      padding: 16px 20px;
+      border-radius: 10px;
+      backdrop-filter: blur(10px);
+      max-width: 400px;
+      z-index: 100;
+    }
+    #info-panel h2 { font-size: 16px; margin-bottom: 6px; }
+    #info-panel p { font-size: 12px; opacity: 0.8; line-height: 1.5; }
+    #scene-list {
+      position: fixed;
+      right: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 100;
+    }
+    .scene-dot {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.3);
+      border: 1px solid rgba(255,255,255,0.5);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .scene-dot.active { background: #fff; transform: scale(1.3); }
+    #loading {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: #000; z-index: 200;
+      flex-direction: column; gap: 16px;
+    }
+    #loading .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid rgba(255,255,255,0.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #scene-counter {
+      position: fixed;
+      bottom: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      opacity: 0.6;
+      z-index: 100;
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.157.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.157.0/examples/jsm/",
+      "@lumaai/luma-web": "https://unpkg.com/@lumaai/luma-web@0.2.0/dist/library/luma-web.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="loading">
+    <div class="spinner"></div>
+    <div>3Dシーンを読み込み中...</div>
+  </div>
+
+  <div id="info-panel">
+    <h2 id="scene-title">ガザ 3D デジタルアーカイブ</h2>
+    <p id="scene-desc">東京大学・パートナー機関による戦災記録</p>
+  </div>
+
+  <div id="scene-list"></div>
+  <div id="scene-counter"></div>
+
+  <div id="ui-overlay">
+    <button class="ui-btn" id="prev-btn">&larr; 前へ</button>
+    <button class="ui-btn" id="vr-btn">VR体験</button>
+    <button class="ui-btn" id="next-btn">次へ &rarr;</button>
+  </div>
+
+  <script type="module">
+    import {
+      WebGLRenderer, PerspectiveCamera, Scene, Color, FogExp2
+    } from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { LumaSplatsThree } from '@lumaai/luma-web';
+
+    // ─── Scene Data (camera/model values from original wtnv-lab/gaza3dgs) ──
+    const scenes = [
+      {
+        title: 'アル・シファ病院 中庭の避難民 01',
+        description: '砲撃で自宅を失い、ガザ最大の医療拠点であるアル・シファ病院の中庭に身を寄せるパレスチナの人々。医療物資が極度に不足するなか、屋外で治療を受ける姿が記録されている。',
+        credit: '\u00a9 東京大学 & アルジャジーラ',
+        lumaSource: 'https://lumalabs.ai/capture/974233db-7f66-499b-be29-64d14257ddca',
+        cameraPos: [4, 1, 2],
+        modelPos: [-3, 0, 0],
+        modelRot: [-0.3, 180, -0.3],
+      },
+      {
+        title: 'アル・シファ病院 中庭の避難民 02',
+        description: '中庭の別の角度からの記録。車椅子や簡易ベッドが並び、老若男女が密集して避難生活を送っている。病院としての機能は既に限界を超えていた。',
+        credit: '\u00a9 東京大学 & アルジャジーラ',
+        lumaSource: 'https://lumalabs.ai/capture/e58bf521-454c-450c-a1bf-d9c174a4ed66',
+        cameraPos: [-0.75, 1.0, 3.5],
+        modelPos: [-1.775, 0, 4.25],
+        modelRot: [0, 180, 0.22],
+      },
+      {
+        title: 'アル・シファ病院 中庭（駐車場）',
+        description: '病院敷地内の駐車場。空爆により破壊された車両が残されたまま放置されている。かつて救急車が往来していた場所が、瓦礫の山と化している。',
+        credit: '\u00a9 東京大学 & アルジャジーラ',
+        lumaSource: 'https://lumalabs.ai/capture/246aa471-99f3-40e4-802f-c671da03df73',
+        cameraPos: [0.5, 0, 3],
+        modelPos: [0, -1, 0],
+        modelRot: [0, 0, 0.1],
+      },
+      {
+        title: 'アル・シファ病院 破壊された正面入口 01',
+        description: 'ガザ地区最大の病院の正面玄関。激しい砲撃と軍事作戦により、建物の構造が大きく損壊している。医療施設への攻撃は国際人道法で禁じられている。',
+        credit: '\u00a9 東京大学 & アルジャジーラ',
+        lumaSource: 'https://lumalabs.ai/capture/31a1fe92-ad40-4b44-9777-487932d1ce48',
+        cameraPos: [3, 0.5, -1],
+        modelPos: [2, -1, 0],
+        modelRot: [0, 0, -0.1],
+      },
+      {
+        title: 'アル・シファ病院 破壊された正面入口 02',
+        description: '繰り返された軍事攻撃の痕跡。壁面には弾痕が無数に残り、天井は崩落している。この場所でかつて多くの命が救われていた。',
+        credit: '\u00a9 東京大学 & アルジャジーラ',
+        lumaSource: 'https://lumalabs.ai/capture/516c1cf7-1d12-490f-93d7-980c1108b965',
+        cameraPos: [2, 0, 1],
+        modelPos: [0, 0, 0],
+        modelRot: [-0.025, 0, -0.05],
+      },
+      {
+        title: 'アル・シファ病院 内部',
+        description: '病院内部の惨状。廊下には破壊された医療機器や瓦礫が散乱し、電力・水道も途絶した状態が続いていた。それでも医療従事者は治療を続けた。',
+        credit: '\u00a9 東京大学 & アルジャジーラ',
+        lumaSource: 'https://lumalabs.ai/capture/878c25f6-9d11-4288-a535-39d5ed2ea6c6',
+        cameraPos: [2, 1, 1],
+        modelPos: [0, 0, 0],
+        modelRot: [-0.1, 0, 0],
+      },
+      {
+        title: '身を寄せ合う新生児たち',
+        description: '保育器が不足し、一つのベッドに複数の早産児が寝かされている。電力が断たれた病院で、体温を保つためにこうして身を寄せ合わせるしかなかった。',
+        credit: '\u00a9 東京大学 & アルジャジーラ',
+        lumaSource: 'https://lumalabs.ai/capture/433cd331-1f50-4077-8d77-34ef4173bd9e',
+        cameraPos: [-0.2, 1.5, 3],
+        modelPos: [1, 0, -1],
+        modelRot: [0, 0, 0],
+      },
+      {
+        title: '応急処置を受ける早産児',
+        description: '正規の医療設備が使えないなか、即席の環境で懸命に生きようとする早産児たち。医薬品の搬入も遮断され、医師たちは限られた物資で命をつないでいた。',
+        credit: '\u00a9 東京大学 & アルジャジーラ',
+        lumaSource: 'https://lumalabs.ai/capture/af474206-210c-43b7-bcf7-f963d6b04900',
+        cameraPos: [-5, 2, 3],
+        modelPos: [-2, 0, 0],
+        modelRot: [-0.075, 0.7, -0.4],
+      },
+      {
+        title: '放棄された新生児集中治療室（NICU）',
+        description: 'かつて新生児の命を守っていたNICUは、もはや機能していない。保育器は空のまま残され、電源も入らない。ここで救えたはずの命を想起させる空間。',
+        credit: '\u00a9 東京大学 & アルジャジーラ',
+        lumaSource: 'https://lumalabs.ai/capture/8408d73d-04dc-4f6d-92f5-5efd2b3af5d0',
+        cameraPos: [-5, 1, 1],
+        modelPos: [0, 0, 0],
+        modelRot: [0.2, 180, 0.15],
+      },
+      {
+        title: '日本のODAで建設されたハン・ユニスの陸橋',
+        description: '日本政府の政府開発援助（ODA）によって建設されたハン・ユニスの陸橋。平和と発展のために築かれたインフラが、紛争によって破壊の危機にさらされている。',
+        credit: '\u00a9 東京大学 & UNRWA',
+        lumaSource: 'https://lumalabs.ai/capture/6e0ba4f5-6a08-42ae-b048-9ddd9f801c98',
+        cameraPos: [3, 2, 5],
+        modelPos: [0, 0, 0],
+        modelRot: [0, 0, 0],
+      },
+    ];
+
+    // ─── State ───────────────────────────────────────────────────────
+    const params = new URLSearchParams(window.location.search);
+    let currentIndex = parseInt(params.get('scene') || '0', 10);
+    if (currentIndex < 0 || currentIndex >= scenes.length) currentIndex = 0;
+
+    let renderer, camera, scene, controls, currentSplat;
+
+    // DOM
+    const loadingEl = document.getElementById('loading');
+    const titleEl = document.getElementById('scene-title');
+    const descEl = document.getElementById('scene-desc');
+    const counterEl = document.getElementById('scene-counter');
+    const vrBtn = document.getElementById('vr-btn');
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const sceneListEl = document.getElementById('scene-list');
+
+    // ─── Three.js Setup ─────────────────────────────────────────────
+    function initThree() {
+      renderer = new WebGLRenderer({ antialias: false });
+      renderer.setPixelRatio(1);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.xr.enabled = true;
+      document.body.prepend(renderer.domElement);
+
+      scene = new Scene();
+
+      camera = new PerspectiveCamera(
+        40, window.innerWidth / window.innerHeight, 0.1, 50
+      );
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.maxDistance = 7.0;
+      controls.maxPolarAngle = Math.PI * 0.5;
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    }
+
+    // ─── Load Scene ─────────────────────────────────────────────────
+    function loadScene(index) {
+      const s = scenes[index];
+
+      // Remove previous splat
+      if (currentSplat) {
+        scene.remove(currentSplat);
+        currentSplat.dispose?.();
+        currentSplat = null;
+      }
+
+      // UI update
+      titleEl.textContent = s.title;
+      descEl.textContent = s.description + '\n' + s.credit;
+      counterEl.textContent = `${index + 1} / ${scenes.length}`;
+      updateDots();
+
+      // Camera - gyro mode: place camera at model center for 360° view
+      if (gyroActive) {
+        const cx = s.modelPos ? s.modelPos[0] : 0;
+        const cy = s.modelPos ? s.modelPos[1] + 1.0 : 1.0; // slightly above center (eye height)
+        const cz = s.modelPos ? s.modelPos[2] : 0;
+        camera.position.set(cx, cy, cz);
+      } else {
+        camera.position.set(...s.cameraPos);
+        controls.target.set(0, 0, 0);
+        controls.update();
+      }
+
+      // Create Luma splat
+      loadingEl.style.display = 'flex';
+
+      currentSplat = new LumaSplatsThree({
+        source: s.lumaSource,
+      });
+
+      if (s.modelPos) {
+        currentSplat.position.set(...s.modelPos);
+      }
+      if (s.modelRot) {
+        currentSplat.rotation.set(...s.modelRot);
+      }
+
+      currentSplat.onInitialCameraTransform = () => {
+        loadingEl.style.display = 'none';
+      };
+
+      // Fallback: hide loading after timeout
+      setTimeout(() => {
+        loadingEl.style.display = 'none';
+      }, 8000);
+
+      scene.add(currentSplat);
+    }
+
+    // ─── Navigation ─────────────────────────────────────────────────
+    function goTo(index) {
+      currentIndex = index;
+      loadScene(index);
+    }
+
+    function next() {
+      goTo((currentIndex + 1) % scenes.length);
+    }
+
+    function prev() {
+      goTo((currentIndex - 1 + scenes.length) % scenes.length);
+    }
+
+    function updateDots() {
+      sceneListEl.innerHTML = '';
+      scenes.forEach((_, i) => {
+        const dot = document.createElement('div');
+        dot.className = `scene-dot ${i === currentIndex ? 'active' : ''}`;
+        dot.addEventListener('click', () => goTo(i));
+        sceneListEl.appendChild(dot);
+      });
+    }
+
+    // ─── Gyroscope / Device Orientation (iOS/iPad magic window) ─────
+    let gyroActive = false;
+    let deviceAlpha = 0, deviceBeta = 0, deviceGamma = 0;
+    let gyroBaseAlpha = null;
+    const degToRad = Math.PI / 180;
+
+    // Reusable Three.js objects (created once in initVR)
+    let _zee, _euler, _q0, _q1, _qScreen;
+
+    // ─── Pinch Zoom (gyro mode) ──────────────────────────────────
+    let pinchStartDist = 0;
+    let gyroFov = 40; // default FOV
+
+    function onTouchStart(e) {
+      if (!gyroActive || e.touches.length !== 2) return;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      pinchStartDist = Math.hypot(dx, dy);
+    }
+
+    function onTouchMove(e) {
+      if (!gyroActive || e.touches.length !== 2) return;
+      e.preventDefault();
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      const scale = pinchStartDist / dist;
+      gyroFov = Math.max(20, Math.min(80, gyroFov * scale));
+      camera.fov = gyroFov;
+      camera.updateProjectionMatrix();
+      pinchStartDist = dist;
+    }
+
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+
+    function onDeviceOrientation(e) {
+      if (e.alpha === null) return;
+      if (gyroBaseAlpha === null) gyroBaseAlpha = e.alpha;
+      deviceAlpha = e.alpha;
+      deviceBeta = e.beta;
+      deviceGamma = e.gamma;
+    }
+
+    function updateGyroCamera() {
+      if (!gyroActive) return;
+
+      // alpha = compass (z), beta = front-back tilt (x), gamma = left-right tilt (y)
+      const alpha = (deviceAlpha - (gyroBaseAlpha || 0)) * degToRad; // yaw
+      const beta = deviceBeta * degToRad;   // pitch
+      const gamma = deviceGamma * degToRad; // roll
+
+      // Screen orientation (portrait=0, landscape left=90, etc.)
+      const orient = (screen.orientation?.angle || window.orientation || 0) * degToRad;
+
+      // Three.js DeviceOrientationControls algorithm:
+      // 1. Set Euler from device angles in ZXY order
+      _euler.set(beta, alpha, -gamma, 'YXZ');
+      camera.quaternion.setFromEuler(_euler);
+
+      // 2. Rotate -90° around X to align "up" with device's "screen facing user"
+      camera.quaternion.multiply(_q1);
+
+      // 3. Compensate for screen orientation
+      _qScreen.setFromAxisAngle(_zee, -orient);
+      camera.quaternion.multiply(_qScreen);
+    }
+
+    async function startGyro() {
+      // Try requesting permission (iOS 13+), but don't let it block activation
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+          // Timeout after 3s in case the dialog never appears
+          const perm = await Promise.race([
+            DeviceOrientationEvent.requestPermission(),
+            new Promise(resolve => setTimeout(() => resolve('timeout'), 3000)),
+          ]);
+          console.log('[Gyro] permission result:', perm);
+        } catch (err) {
+          console.log('[Gyro] permission error (continuing anyway):', err);
+        }
+      }
+
+      // Activate gyro mode regardless of permission result
+      window.addEventListener('deviceorientation', onDeviceOrientation, true);
+      gyroBaseAlpha = null;
+      gyroActive = true;
+      controls.enabled = false;
+      vrBtn.textContent = 'ジャイロ終了';
+      vrBtn.style.background = 'rgba(200,60,60,0.8)';
+      vrBtn.style.borderColor = 'rgba(255,100,100,0.6)';
+
+      // Move camera to model center for 360° immersive view
+      const s = scenes[currentIndex];
+      const cx = s.modelPos ? s.modelPos[0] : 0;
+      const cy = s.modelPos ? s.modelPos[1] + 1.0 : 1.0;
+      const cz = s.modelPos ? s.modelPos[2] : 0;
+      camera.position.set(cx, cy, cz);
+
+      // Check if gyro data actually arrives
+      let gotData = false;
+      const checkHandler = (e) => { if (e.alpha !== null) gotData = true; };
+      window.addEventListener('deviceorientation', checkHandler);
+      setTimeout(() => {
+        window.removeEventListener('deviceorientation', checkHandler);
+        if (!gotData && gyroActive) {
+          console.log('[Gyro] no data received after 3s');
+          alert('ジャイロセンサーのデータが取得できません。\n\n・HTTPSでアクセスしていますか？\n・ブラウザの設定でモーションアクセスが許可されていますか？');
+        }
+      }, 3000);
+
+      console.log('[Gyro] started');
+    }
+
+    function stopGyro() {
+      window.removeEventListener('deviceorientation', onDeviceOrientation, true);
+      gyroActive = false;
+      controls.enabled = true;
+      vrBtn.textContent = 'ジャイロ体験';
+      vrBtn.style.background = 'rgba(60,130,200,0.8)';
+      vrBtn.style.borderColor = 'rgba(100,160,255,0.6)';
+
+      // Reset FOV
+      gyroFov = 40;
+      camera.fov = 40;
+      camera.updateProjectionMatrix();
+
+      // Restore camera position from scene data
+      const s = scenes[currentIndex];
+      camera.position.set(...s.cameraPos);
+      controls.target.set(0, 0, 0);
+      controls.update();
+    }
+
+    // ─── WebXR / Gyro Init ───────────────────────────────────────────
+    // We need Euler/Quaternion/Vector3 for gyro - store refs
+    async function initVR() {
+      const three = await import('three');
+
+      // Create reusable objects for gyro
+      _zee = new three.Vector3(0, 0, 1);
+      _euler = new three.Euler();
+      _q0 = new three.Quaternion();
+      _q1 = new three.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // -90° x
+      _qScreen = new three.Quaternion();
+
+      // ── Detect device type ──
+      // Priority: WebXR VR > Gyro (mobile) > Desktop fallback
+      let mode = 'none'; // 'vr', 'gyro', 'none'
+
+      // 1) Check WebXR (Quest, desktop VR headsets)
+      try {
+        if (navigator.xr) {
+          const vrOk = await navigator.xr.isSessionSupported('immersive-vr');
+          if (vrOk) mode = 'vr';
+        }
+      } catch (e) {
+        console.log('[WebXR check failed]', e);
+      }
+
+      // 2) If no VR, check if this is a mobile/tablet device → offer gyro
+      //    Use multiple signals since iPadOS UA says "Macintosh"
+      if (mode === 'none') {
+        const touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        const mobileUA = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const coarsePointer = window.matchMedia?.('(pointer: coarse)')?.matches;
+        // Any of these combos means mobile/tablet:
+        if (touch || mobileUA || coarsePointer) {
+          mode = 'gyro';
+        }
+      }
+
+      console.log('[Mode detect]', mode, JSON.stringify({
+        xr: !!navigator.xr,
+        touch: 'ontouchstart' in window,
+        maxTP: navigator.maxTouchPoints,
+        coarse: window.matchMedia?.('(pointer: coarse)')?.matches,
+        ua: navigator.userAgent.substring(0, 80),
+      }));
+
+      if (mode === 'vr') {
+        vrBtn.textContent = 'VR体験';
+        vrBtn.addEventListener('click', async () => {
+          try {
+            const session = await navigator.xr.requestSession('immersive-vr', {
+              optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'],
+            });
+            renderer.xr.setSession(session);
+            document.getElementById('ui-overlay').style.display = 'none';
+            document.getElementById('info-panel').style.display = 'none';
+            document.getElementById('scene-list').style.display = 'none';
+            document.getElementById('scene-counter').style.display = 'none';
+            vrBtn.textContent = 'VR中';
+            session.addEventListener('end', () => {
+              document.getElementById('ui-overlay').style.display = 'flex';
+              document.getElementById('info-panel').style.display = 'block';
+              document.getElementById('scene-list').style.display = 'flex';
+              document.getElementById('scene-counter').style.display = 'block';
+              vrBtn.textContent = 'VR体験';
+            });
+          } catch (err) {
+            console.error('VR failed:', err);
+          }
+        });
+      } else if (mode === 'gyro') {
+        vrBtn.textContent = 'ジャイロ体験';
+        vrBtn.style.background = 'rgba(60,130,200,0.8)';
+        vrBtn.style.borderColor = 'rgba(100,160,255,0.6)';
+        vrBtn.addEventListener('click', async () => {
+          if (gyroActive) {
+            stopGyro();
+          } else {
+            await startGyro();
+          }
+        });
+      } else {
+        vrBtn.textContent = 'VR非対応';
+        vrBtn.disabled = true;
+      }
+    }
+
+    // ─── Keyboard ───────────────────────────────────────────────────
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'd') next();
+      if (e.key === 'ArrowLeft' || e.key === 'a') prev();
+    });
+
+    // ─── Render Loop ────────────────────────────────────────────────
+    function animate() {
+      const maxFps = 60;
+      const interval = 1000 / maxFps;
+      let lastTime = 0;
+
+      renderer.setAnimationLoop((time) => {
+        if (time - lastTime < interval) return;
+        lastTime = time;
+        if (gyroActive) {
+          updateGyroCamera();
+        } else {
+          controls.update();
+        }
+        renderer.render(scene, camera);
+      });
+    }
+
+    // ─── Init ───────────────────────────────────────────────────────
+    async function init() {
+      initThree();
+      await initVR();
+
+      prevBtn.addEventListener('click', prev);
+      nextBtn.addEventListener('click', next);
+
+      loadScene(currentIndex);
+      animate();
+    }
+
+    init().catch(console.error);
+  </script>
+</body>
+</html>
